@@ -258,8 +258,8 @@ class SupabaseService {
     senderId: m['sender_id'] as String,
     receiverId: m['receiver_id'] as String,
     body: m['body'] as String,
-    createdAt: DateTime.parse(m['created_at'] as String),
-    readAt: _parseOptionalDate(m['read_at']),
+    createdAt: DateTime.parse(m['created_at'] as String).toLocal(),
+    readAt: _parseOptionalDate(m['read_at'])?.toLocal(),
   );
 
   static Future<List<ChatMessage>> getChatMessages(String otherUserId) async {

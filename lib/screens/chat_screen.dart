@@ -82,15 +82,62 @@ class _ChatScreenState extends State<ChatScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollCtrl.hasClients) return;
       _scrollCtrl.animateTo(
-        _scrollCtrl.position.minScrollExtent,
+        _scrollCtrl.position.maxScrollExtent,
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOut,
       );
     });
   }
 
-  String _time(DateTime value) =>
-      '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+  String _time(DateTime value) {
+    final local = value.toLocal();
+    return '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  }
+
+  List<_ChatItem> _buildItems() {
+    final items = <_ChatItem>[];
+    DateTime? currentDay;
+    for (final message in _messages) {
+      final localCreated = message.createdAt.toLocal();
+      final day = DateTime(
+        localCreated.year,
+        localCreated.month,
+        localCreated.day,
+      );
+      if (currentDay == null || !isSameDay(currentDay, day)) {
+        items.add(_ChatItem.date(day));
+        currentDay = day;
+      }
+      items.add(_ChatItem.message(message));
+    }
+    return items;
+  }
+
+  static bool isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  String _dateLabel(DateTime date) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final current = DateTime(date.year, date.month, date.day);
+    if (current == today) return 'Сегодня';
+    if (current == today.subtract(const Duration(days: 1))) return 'Вчера';
+    const monthNames = [
+      'января',
+      'февраля',
+      'марта',
+      'апреля',
+      'мая',
+      'июня',
+      'июля',
+      'августа',
+      'сентября',
+      'октября',
+      'ноября',
+      'декабря',
+    ];
+    return '${date.day} ${monthNames[date.month - 1]} ${date.year}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -130,21 +177,30 @@ class _ChatScreenState extends State<ChatScreen> {
                   : RefreshIndicator(
                       color: NLColors.accent,
                       onRefresh: _load,
-                      child: ListView.builder(
-                        controller: _scrollCtrl,
-                        reverse: true,
-                        padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
-                        itemCount: _messages.length,
-                        itemBuilder: (context, index) {
-                          final message =
-                              _messages[_messages.length - 1 - index];
-                          final mine =
-                              currentUserId != null &&
-                              message.isMine(currentUserId);
-                          return _MessageBubble(
-                            message: message,
-                            mine: mine,
-                            time: _time(message.createdAt),
+                      child: Builder(
+                        builder: (context) {
+                          final items = _buildItems();
+                          return ListView.builder(
+                            controller: _scrollCtrl,
+                            padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+                            itemCount: items.length,
+                            itemBuilder: (context, index) {
+                              final item = items[index];
+                              if (item.isDateHeader) {
+                                return _DateHeader(
+                                  label: _dateLabel(item.date!),
+                                );
+                              }
+                              final message = item.message!;
+                              final mine =
+                                  currentUserId != null &&
+                                  message.isMine(currentUserId);
+                              return _MessageBubble(
+                                message: message,
+                                mine: mine,
+                                time: _time(message.createdAt),
+                              );
+                            },
                           );
                         },
                       ),
@@ -275,6 +331,47 @@ class _MessageBubble extends StatelessWidget {
       ),
     );
   }
+}
+
+class _DateHeader extends StatelessWidget {
+  final String label;
+
+  const _DateHeader({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Align(
+        alignment: Alignment.center,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: NLColors.surface2,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 13,
+              color: NLColors.muted,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChatItem {
+  final DateTime? date;
+  final ChatMessage? message;
+
+  const _ChatItem.date(this.date) : message = null;
+  const _ChatItem.message(this.message) : date = null;
+
+  bool get isDateHeader => date != null;
 }
 
 class _EmptyChat extends StatelessWidget {
