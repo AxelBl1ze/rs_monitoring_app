@@ -397,7 +397,7 @@ class SupabaseService {
       final m = row as Map<String, dynamic>;
       return DiaryEntry(
         id: m['id'] as String,
-        dateTime: DateTime.parse(m['date_time'] as String),
+        dateTime: DateTime.parse(m['date_time'] as String).toLocal(),
         fatigue: m['fatigue'] as int,
         pain: m['pain'] as int,
         mood: m['mood'] as int,
@@ -417,7 +417,7 @@ class SupabaseService {
     await _client.from('diary_entries').insert({
       'id': entry.id,
       'user_id': userId,
-      'date_time': entry.dateTime.toIso8601String(),
+      'date_time': entry.dateTime.toUtc().toIso8601String(),
       'fatigue': entry.fatigue,
       'pain': entry.pain,
       'mood': entry.mood,
@@ -433,10 +433,10 @@ class SupabaseService {
   }
 
   static Future<void> updateDiaryEntry(String userId, DiaryEntry entry) async {
-    await _client
+    final updated = await _client
         .from('diary_entries')
         .update({
-          'date_time': entry.dateTime.toIso8601String(),
+          'date_time': entry.dateTime.toUtc().toIso8601String(),
           'fatigue': entry.fatigue,
           'pain': entry.pain,
           'mood': entry.mood,
@@ -450,7 +450,15 @@ class SupabaseService {
           'flare_flag': entry.flareFlag,
         })
         .eq('id', entry.id)
-        .eq('user_id', userId);
+        .eq('user_id', userId)
+        .select('id')
+        .maybeSingle();
+
+    if (updated == null) {
+      throw StateError(
+        'Запись не найдена или недоступна для текущего пользователя',
+      );
+    }
   }
 
   static Future<void> deleteDiaryEntry(String userId, String id) async {

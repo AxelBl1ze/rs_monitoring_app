@@ -201,11 +201,16 @@ class _HistoryListBodyState extends State<HistoryListBody> {
                           dayLabel: _dayLabel(e.value.dateTime),
                           onDelete: () =>
                               context.read<DiaryProvider>().delete(e.value.id),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => DiaryEntryScreen(entry: e.value),
-                            ),
-                          ),
+                          onTap: () async {
+                            final diaryProvider = context.read<DiaryProvider>();
+                            await Navigator.of(context).push<bool?>(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    DiaryEntryScreen(entry: e.value),
+                              ),
+                            );
+                            await diaryProvider.load();
+                          },
                         );
                       }).toList(),
                     ),

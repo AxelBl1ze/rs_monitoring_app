@@ -272,7 +272,7 @@ class _DiaryEntryScreenState extends State<DiaryEntryScreen> {
           ),
         );
       }
-      if (mounted) Navigator.of(context).pop();
+      if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);

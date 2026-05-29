@@ -25,10 +25,35 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _tab = 0;
 
   static const _keys = ['home', 'diary', 'chart', 'profile'];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshDiary());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshDiary();
+    }
+  }
+
+  Future<void> _refreshDiary() async {
+    if (!mounted) return;
+    await context.read<DiaryProvider>().load();
+  }
 
   Widget _body() {
     switch (_tab) {
@@ -54,13 +79,17 @@ class _HomeScreenState extends State<HomeScreen> {
           NLTabBar(
             active: _keys[_tab],
             onTabChanged: (key) => setState(() => _tab = _keys.indexOf(key)),
-            onFab: () {
-              final today = context.read<DiaryProvider>().todayDiaryEntry;
-              Navigator.of(context).push(
+            onFab: () async {
+              final diary = context.read<DiaryProvider>();
+              final today = diary.todayDiaryEntry;
+              final result = await Navigator.of(context).push<bool?>(
                 MaterialPageRoute(
                   builder: (_) => DiaryEntryScreen(entry: today),
                 ),
               );
+              if (result == true) {
+                await diary.load();
+              }
             },
           ),
         ],
@@ -449,9 +478,13 @@ class _TodayCard extends StatelessWidget {
 
     if (entry != null) {
       return GestureDetector(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => DiaryEntryScreen(entry: entry)),
-        ),
+        onTap: () async {
+          final diaryProvider = context.read<DiaryProvider>();
+          await Navigator.of(context).push<bool?>(
+            MaterialPageRoute(builder: (_) => DiaryEntryScreen(entry: entry)),
+          );
+          await diaryProvider.load();
+        },
         child: NLCard(
           color: NLColors.mintSoft,
           child: Row(
@@ -522,9 +555,13 @@ class _TodayCard extends StatelessWidget {
     }
 
     return GestureDetector(
-      onTap: () => Navigator.of(
-        context,
-      ).push(MaterialPageRoute(builder: (_) => const DiaryEntryScreen())),
+      onTap: () async {
+        final diaryProvider = context.read<DiaryProvider>();
+        await Navigator.of(context).push<bool?>(
+          MaterialPageRoute(builder: (_) => const DiaryEntryScreen()),
+        );
+        await diaryProvider.load();
+      },
       child: NLCard(
         color: NLColors.accentSoft,
         child: Row(
