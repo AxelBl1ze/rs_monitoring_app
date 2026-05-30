@@ -110,6 +110,11 @@ class _HistoryListBodyState extends State<HistoryListBody> {
             actions: [
               const SizedBox(width: 8),
               NLCircleBtn(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const HistoryCalendarScreen(),
+                  ),
+                ),
                 child: const Icon(
                   Icons.calendar_month_outlined,
                   color: NLColors.ink,
