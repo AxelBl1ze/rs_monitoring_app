@@ -172,7 +172,8 @@ class _HistoryCalendarScreenState extends State<HistoryCalendarScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              NLHeader(greeting: 'Все записи', title: 'История'),
+              const NLTopBar(leading: NLBackBtn(), title: 'История'),
+              const SizedBox(height: 6),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 18),
                 child: Column(
@@ -181,7 +182,11 @@ class _HistoryCalendarScreenState extends State<HistoryCalendarScreen> {
                     NLSegmented(
                       items: const ['Список', 'Календарь'],
                       active: 'Календарь',
-                      onChange: (_) => Navigator.of(context).pop(),
+                      onChange: (value) {
+                        if (value == 'Список') {
+                          Navigator.of(context).pop();
+                        }
+                      },
                     ),
                     const SizedBox(height: 14),
 

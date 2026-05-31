@@ -58,11 +58,11 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   Widget _body() {
     switch (_tab) {
       case 1:
-        return const HistoryListBody();
+        return const SafeArea(bottom: false, child: HistoryListBody());
       case 2:
-        return const AnalyticsBody();
+        return const SafeArea(bottom: false, child: AnalyticsBody());
       case 3:
-        return const SettingsBody();
+        return const SafeArea(bottom: false, child: SettingsBody());
       default:
         return _HomeTab(onProfileTap: () => setState(() => _tab = 3));
     }
