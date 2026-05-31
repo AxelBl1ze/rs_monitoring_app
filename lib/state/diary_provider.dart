@@ -40,7 +40,9 @@ class DiaryProvider extends ChangeNotifier {
   List<DiaryEntry> lastDays(int days) {
     final from = DateTime.now().subtract(Duration(days: days - 1));
     final start = DateTime(from.year, from.month, from.day);
-    return getByPeriod(start, DateTime.now());
+    final now = DateTime.now();
+    final end = DateTime(now.year, now.month, now.day, 23, 59, 59, 999);
+    return getByPeriod(start, end);
   }
 
   double? averageLastDays(double Function(DiaryEntry) metric, int days) {
@@ -71,18 +73,22 @@ class DiaryProvider extends ChangeNotifier {
 
   // ─── Load ────────────────────────────────────────────────────────────────
 
-  Future<void> load() async {
+  Future<void> load({bool silent = false}) async {
     final userId = SupabaseService.currentUserId;
     if (userId == null) return;
-    _loading = true;
-    notifyListeners();
+    if (!silent) {
+      _loading = true;
+      notifyListeners();
+    }
     try {
       _entries = await SupabaseService.getDiaryEntries(userId);
       _error = null;
     } catch (e) {
       _error = 'Не удалось загрузить записи дневника';
     } finally {
-      _loading = false;
+      if (!silent) {
+        _loading = false;
+      }
     }
     notifyListeners();
   }
@@ -97,22 +103,47 @@ class DiaryProvider extends ChangeNotifier {
       throw StateError('Пользователь не авторизован');
     }
     try {
-      await SupabaseService.insertDiaryEntry(userId, entry);
-      final idx = _entries.indexWhere(
-        (e) => e.dateTime.isBefore(entry.dateTime),
+      await load(silent: true);
+      // Prevent creating duplicate entries for the same calendar day.
+      final existingIdx = _entries.indexWhere(
+        (e) =>
+            e.dateTime.year == entry.dateTime.year &&
+            e.dateTime.month == entry.dateTime.month &&
+            e.dateTime.day == entry.dateTime.day,
       );
-      if (idx == -1) {
-        _entries.add(entry);
+      if (existingIdx != -1) {
+        // Update the existing entry instead of inserting a new one.
+        final existing = _entries[existingIdx];
+        final updated = DiaryEntry(
+          id: existing.id,
+          dateTime: entry.dateTime,
+          fatigue: entry.fatigue,
+          pain: entry.pain,
+          mood: entry.mood,
+          numbness: entry.numbness,
+          coordination: entry.coordination,
+          vision: entry.vision,
+          weakness: entry.weakness,
+          stress: entry.stress,
+          sleepHours: entry.sleepHours,
+          note: entry.note,
+          flareFlag: entry.flareFlag,
+        );
+        await SupabaseService.updateDiaryEntry(userId, updated);
+        // Refresh from server to pick up any server-side changes.
+        await load();
+        return;
       } else {
-        _entries.insert(idx, entry);
+        await SupabaseService.insertDiaryEntry(userId, entry);
+        // Refresh from server so we get server-assigned fields (id/timestamps).
+        await load();
+        return;
       }
-      _error = null;
     } catch (e) {
       _error = 'Не удалось сохранить запись';
       notifyListeners();
       rethrow;
     }
-    notifyListeners();
   }
 
   Future<void> update(DiaryEntry entry) async {
@@ -124,15 +155,14 @@ class DiaryProvider extends ChangeNotifier {
     }
     try {
       await SupabaseService.updateDiaryEntry(userId, entry);
-      final idx = _entries.indexWhere((e) => e.id == entry.id);
-      if (idx != -1) _entries[idx] = entry;
-      _error = null;
+      // Refresh to ensure server-side canonical data is reflected.
+      await load();
+      return;
     } catch (e) {
       _error = 'Не удалось обновить запись';
       notifyListeners();
       rethrow;
     }
-    notifyListeners();
   }
 
   Future<void> delete(String id) async {

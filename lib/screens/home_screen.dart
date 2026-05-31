@@ -8,9 +8,11 @@ import '../state/profile_provider.dart';
 import '../state/settings_provider.dart';
 import '../state/test_results_provider.dart';
 import '../services/analytics_service.dart';
+import '../services/storage_service.dart';
 import '../services/supabase_service.dart';
 import 'diary_entry_screen.dart';
 import 'history_list_screen.dart';
+import 'lock_screen.dart';
 import 'analytics_screen.dart';
 import 'settings_screen.dart';
 import 'patient_care_screen.dart';
@@ -25,19 +27,65 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _tab = 0;
+  bool _lockOnResume = false;
 
   static const _keys = ['home', 'diary', 'chart', 'profile'];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _refreshDiary());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _lockOnResume = true;
+      return;
+    }
+    if (state == AppLifecycleState.resumed) {
+      if (_lockOnResume) {
+        _lockOnResume = false;
+        if (_lockIfNeeded()) return;
+      }
+      _refreshDiary();
+    }
+  }
+
+  bool _lockIfNeeded() {
+    if (!mounted) return false;
+    if (!hasAppPin()) return false;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => const LockScreen(destination: HomeScreen()),
+      ),
+      (_) => false,
+    );
+    return true;
+  }
+
+  Future<void> _refreshDiary() async {
+    if (!mounted) return;
+    await context.read<DiaryProvider>().load();
+  }
 
   Widget _body() {
     switch (_tab) {
       case 1:
-        return const HistoryListBody();
+        return const SafeArea(bottom: false, child: HistoryListBody());
       case 2:
-        return const AnalyticsBody();
+        return const SafeArea(bottom: false, child: AnalyticsBody());
       case 3:
-        return const SettingsBody();
+        return const SafeArea(bottom: false, child: SettingsBody());
       default:
         return _HomeTab(onProfileTap: () => setState(() => _tab = 3));
     }
@@ -54,13 +102,17 @@ class _HomeScreenState extends State<HomeScreen> {
           NLTabBar(
             active: _keys[_tab],
             onTabChanged: (key) => setState(() => _tab = _keys.indexOf(key)),
-            onFab: () {
-              final today = context.read<DiaryProvider>().todayDiaryEntry;
-              Navigator.of(context).push(
+            onFab: () async {
+              final diary = context.read<DiaryProvider>();
+              final today = diary.todayDiaryEntry;
+              final result = await Navigator.of(context).push<bool?>(
                 MaterialPageRoute(
                   builder: (_) => DiaryEntryScreen(entry: today),
                 ),
               );
+              if (result == true) {
+                await diary.load();
+              }
             },
           ),
         ],
@@ -449,9 +501,13 @@ class _TodayCard extends StatelessWidget {
 
     if (entry != null) {
       return GestureDetector(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(builder: (_) => DiaryEntryScreen(entry: entry)),
-        ),
+        onTap: () async {
+          final diaryProvider = context.read<DiaryProvider>();
+          await Navigator.of(context).push<bool?>(
+            MaterialPageRoute(builder: (_) => DiaryEntryScreen(entry: entry)),
+          );
+          await diaryProvider.load();
+        },
         child: NLCard(
           color: NLColors.mintSoft,
           child: Row(
@@ -522,9 +578,13 @@ class _TodayCard extends StatelessWidget {
     }
 
     return GestureDetector(
-      onTap: () => Navigator.of(
-        context,
-      ).push(MaterialPageRoute(builder: (_) => const DiaryEntryScreen())),
+      onTap: () async {
+        final diaryProvider = context.read<DiaryProvider>();
+        await Navigator.of(context).push<bool?>(
+          MaterialPageRoute(builder: (_) => const DiaryEntryScreen()),
+        );
+        await diaryProvider.load();
+      },
       child: NLCard(
         color: NLColors.accentSoft,
         child: Row(

@@ -7,6 +7,7 @@ import '../state/test_results_provider.dart';
 import '../models/diary_entry.dart';
 import '../models/test_result.dart';
 import '../services/analytics_service.dart';
+import 'export_screen.dart';
 import 'signals_screen.dart';
 
 class AnalyticsScreen extends StatelessWidget {
@@ -234,6 +235,9 @@ class _AnalyticsBodyState extends State<AnalyticsBody> {
             actions: [
               const SizedBox(width: 8),
               NLCircleBtn(
+                onTap: () => Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const ExportScreen())),
                 child: const Icon(
                   Icons.download_outlined,
                   color: NLColors.ink,
