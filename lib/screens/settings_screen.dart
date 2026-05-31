@@ -392,6 +392,8 @@ class SettingsBody extends StatelessWidget {
                     emergencyContactPhone: _phoneDigits(
                       emergencyPhoneCtrl.text,
                     ),
+                    pinEnabled: hasAppPin(),
+                    faceIdEnabled: false,
                   );
                   try {
                     await context.read<ProfileProvider>().saveProfile(
@@ -497,6 +499,8 @@ class SettingsBody extends StatelessWidget {
                   baselineFatigue: fatigue,
                   baselinePain: pain,
                   baselineSleep: sleep,
+                  pinEnabled: hasAppPin(),
+                  faceIdEnabled: false,
                 );
                 try {
                   await context.read<ProfileProvider>().saveProfile(
@@ -661,194 +665,6 @@ class SettingsBody extends StatelessWidget {
     );
   }
 
-  // ── App protection dialogs ─────────────────────────────────────────────
-  static Future<void> _showAppProtectionDialog(
-    BuildContext context,
-    UserProfile profile,
-  ) async {
-    final pinIsActive = profile.pinEnabled && hasAppPin();
-    if (!pinIsActive) {
-      await _showSetPinDialog(context, profile);
-      return;
-    }
-
-    await showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: NLColors.surface,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: const Text(
-          'Защита приложения',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: NLColors.ink,
-          ),
-        ),
-        content: const Text(
-          'PIN-код включён на этом устройстве.',
-          style: TextStyle(fontSize: 14, color: NLColors.muted, height: 1.5),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text(
-              'Отмена',
-              style: TextStyle(color: NLColors.muted),
-            ),
-          ),
-          TextButton(
-            onPressed: () async {
-              final profileProvider = context.read<ProfileProvider>();
-              await deleteAppPin();
-              try {
-                await profileProvider.saveProfile(
-                  profile.copyWith(pinEnabled: false, faceIdEnabled: false),
-                  throwOnError: true,
-                );
-                if (ctx.mounted) Navigator.of(ctx).pop();
-              } catch (e) {
-                if (context.mounted) _showProfileSaveError(context, e);
-              }
-            },
-            child: const Text(
-              'Отключить',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: NLColors.bad,
-              ),
-            ),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              await _showSetPinDialog(context, profile);
-            },
-            child: const Text(
-              'Сменить PIN',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: NLColors.accent,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  static Future<void> _showSetPinDialog(
-    BuildContext context,
-    UserProfile profile,
-  ) async {
-    final profileProvider = context.read<ProfileProvider>();
-    final pinInputFormatters = [
-      FilteringTextInputFormatter.digitsOnly,
-      LengthLimitingTextInputFormatter(4),
-    ];
-    final pinCtrl = TextEditingController();
-    final repeatCtrl = TextEditingController();
-    String? error;
-
-    try {
-      await showDialog<void>(
-        context: context,
-        builder: (ctx) => StatefulBuilder(
-          builder: (ctx, setDialogState) => AlertDialog(
-            backgroundColor: NLColors.surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(20),
-            ),
-            title: const Text(
-              'Установить PIN',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: NLColors.ink,
-              ),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                _ProfileTextField(
-                  label: 'PIN-код',
-                  controller: pinCtrl,
-                  keyboardType: TextInputType.number,
-                  obscureText: true,
-                  inputFormatters: pinInputFormatters,
-                ),
-                const SizedBox(height: 14),
-                _ProfileTextField(
-                  label: 'Повторите PIN',
-                  controller: repeatCtrl,
-                  keyboardType: TextInputType.number,
-                  obscureText: true,
-                  inputFormatters: pinInputFormatters,
-                ),
-                if (error != null) ...[
-                  const SizedBox(height: 10),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      error!,
-                      style: const TextStyle(fontSize: 12, color: NLColors.bad),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(),
-                child: const Text(
-                  'Отмена',
-                  style: TextStyle(color: NLColors.muted),
-                ),
-              ),
-              TextButton(
-                onPressed: () async {
-                  final pin = pinCtrl.text;
-                  final repeat = repeatCtrl.text;
-                  if (pin.length != 4) {
-                    setDialogState(
-                      () => error = 'PIN должен состоять из 4 цифр',
-                    );
-                    return;
-                  }
-                  if (pin != repeat) {
-                    setDialogState(() => error = 'PIN-коды не совпадают');
-                    return;
-                  }
-                  await saveAppPin(pin);
-                  try {
-                    await profileProvider.saveProfile(
-                      profile.copyWith(pinEnabled: true, faceIdEnabled: false),
-                      throwOnError: true,
-                    );
-                    if (ctx.mounted) Navigator.of(ctx).pop();
-                  } catch (e) {
-                    await deleteAppPin();
-                    if (context.mounted) _showProfileSaveError(context, e);
-                  }
-                },
-                child: const Text(
-                  'Сохранить',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: NLColors.accent,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-    } finally {
-      pinCtrl.dispose();
-      repeatCtrl.dispose();
-    }
-  }
-
   // ── Logout dialog ──────────────────────────────────────────────────────
   static Future<void> _showLogoutDialog(BuildContext context) async {
     final confirmed = await showDialog<bool>(
@@ -976,7 +792,6 @@ class SettingsBody extends StatelessWidget {
         ? 'Усталость ${settings.formatSymptomValue(profile.baselineFatigue)} · Боль ${settings.formatSymptomValue(profile.baselinePain)} · Сон ${settings.formatSleepValue(profile.baselineSleep)}${settings.sleepUnit}'
         : '—';
     final personalDataSub = profile != null ? _personalDataSub(profile) : '—';
-    final pinIsActive = profile?.pinEnabled == true && hasAppPin();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.only(bottom: 110),
@@ -1115,21 +930,7 @@ class SettingsBody extends StatelessWidget {
                 const NLSectionTitle('Приватность'),
                 NLList(
                   children: [
-                    GestureDetector(
-                      onTap: profile != null
-                          ? () => _showAppProtectionDialog(context, profile)
-                          : null,
-                      child: NLListRow(
-                        icon: const Icon(
-                          Icons.lock_outline_rounded,
-                          size: 16,
-                          color: NLColors.accent,
-                        ),
-                        iconBg: NLColors.accentSoft,
-                        title: 'Защита приложения',
-                        sub: pinIsActive ? 'PIN включён' : 'PIN выключен',
-                      ),
-                    ),
+                    _AppProtectionRow(profile: profile),
                     GestureDetector(
                       onTap: () => Navigator.of(context).push(
                         MaterialPageRoute(builder: (_) => const ExportScreen()),
@@ -1497,6 +1298,352 @@ class _ProfileDateTile extends StatelessWidget {
 }
 
 // ── Baseline stepper ──────────────────────────────────────────────────────
+
+class _PinSettingsScreen extends StatefulWidget {
+  final UserProfile profile;
+
+  const _PinSettingsScreen({required this.profile});
+
+  @override
+  State<_PinSettingsScreen> createState() => _PinSettingsScreenState();
+}
+
+class _PinSettingsScreenState extends State<_PinSettingsScreen> {
+  final _pinCtrl = TextEditingController();
+  final _repeatCtrl = TextEditingController();
+  final _pinInputFormatters = [
+    FilteringTextInputFormatter.digitsOnly,
+    LengthLimitingTextInputFormatter(4),
+  ];
+
+  late bool _editingPin;
+  bool _saving = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _editingPin = !hasAppPin();
+  }
+
+  @override
+  void dispose() {
+    _pinCtrl.dispose();
+    _repeatCtrl.dispose();
+    super.dispose();
+  }
+
+  void _startEditingPin() {
+    _pinCtrl.clear();
+    _repeatCtrl.clear();
+    setState(() {
+      _editingPin = true;
+      _error = null;
+    });
+  }
+
+  void _cancelEditingPin() {
+    FocusManager.instance.primaryFocus?.unfocus();
+    _pinCtrl.clear();
+    _repeatCtrl.clear();
+    setState(() {
+      _editingPin = false;
+      _error = null;
+    });
+  }
+
+  Future<void> _closeWithChanges() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    await WidgetsBinding.instance.endOfFrame;
+    if (mounted) Navigator.of(context).pop(true);
+  }
+
+  Future<void> _savePin() async {
+    if (_saving) return;
+    final pin = _pinCtrl.text;
+    final repeat = _repeatCtrl.text;
+
+    if (pin.length != 4) {
+      setState(() => _error = 'PIN должен состоять из 4 цифр');
+      return;
+    }
+    if (pin != repeat) {
+      setState(() => _error = 'PIN-коды не совпадают');
+      return;
+    }
+
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final nextProfile = widget.profile.copyWith(
+        pinEnabled: true,
+        faceIdEnabled: false,
+      );
+      await SupabaseService.upsertProfile(nextProfile);
+      await saveAppPin(pin);
+      await _closeWithChanges();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      SettingsBody._showProfileSaveError(context, e);
+    }
+  }
+
+  Future<void> _disablePin() async {
+    if (_saving) return;
+    FocusManager.instance.primaryFocus?.unfocus();
+    setState(() {
+      _saving = true;
+      _error = null;
+    });
+
+    try {
+      final nextProfile = widget.profile.copyWith(
+        pinEnabled: false,
+        faceIdEnabled: false,
+      );
+      await SupabaseService.upsertProfile(nextProfile);
+      await deleteAppPin();
+      await _closeWithChanges();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      SettingsBody._showProfileSaveError(context, e);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pinIsActive = hasAppPin();
+    final title = _editingPin
+        ? (pinIsActive ? 'Новый PIN' : 'Установить PIN')
+        : 'PIN включён';
+
+    return Scaffold(
+      backgroundColor: NLColors.bg,
+      body: SafeArea(
+        bottom: false,
+        child: Column(
+          children: [
+            NLTopBar(
+              leading: NLBackBtn(
+                onTap: _saving ? () {} : () => Navigator.of(context).pop(false),
+              ),
+              title: 'Защита',
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(18, 14, 18, 110),
+                children: [
+                  const NLHeader(
+                    greeting: 'Приватность',
+                    title: 'Защита приложения',
+                  ),
+                  const SizedBox(height: 8),
+                  NLCard(
+                    child: _editingPin
+                        ? _PinForm(
+                            title: title,
+                            pinCtrl: _pinCtrl,
+                            repeatCtrl: _repeatCtrl,
+                            inputFormatters: _pinInputFormatters,
+                            error: _error,
+                            saving: _saving,
+                            canCancel: pinIsActive,
+                            onCancel: _cancelEditingPin,
+                            onSave: _savePin,
+                          )
+                        : _PinEnabledView(
+                            saving: _saving,
+                            onChangePin: _startEditingPin,
+                            onDisablePin: _disablePin,
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PinForm extends StatelessWidget {
+  final String title;
+  final TextEditingController pinCtrl;
+  final TextEditingController repeatCtrl;
+  final List<TextInputFormatter> inputFormatters;
+  final String? error;
+  final bool saving;
+  final bool canCancel;
+  final VoidCallback onCancel;
+  final VoidCallback onSave;
+
+  const _PinForm({
+    required this.title,
+    required this.pinCtrl,
+    required this.repeatCtrl,
+    required this.inputFormatters,
+    required this.error,
+    required this.saving,
+    required this.canCancel,
+    required this.onCancel,
+    required this.onSave,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: NLColors.ink,
+          ),
+        ),
+        const SizedBox(height: 16),
+        _ProfileTextField(
+          label: 'PIN-код',
+          controller: pinCtrl,
+          keyboardType: TextInputType.number,
+          obscureText: true,
+          inputFormatters: inputFormatters,
+        ),
+        const SizedBox(height: 14),
+        _ProfileTextField(
+          label: 'Повторите PIN',
+          controller: repeatCtrl,
+          keyboardType: TextInputType.number,
+          obscureText: true,
+          inputFormatters: inputFormatters,
+        ),
+        if (error != null) ...[
+          const SizedBox(height: 10),
+          Text(
+            error!,
+            style: const TextStyle(fontSize: 12, color: NLColors.bad),
+          ),
+        ],
+        const SizedBox(height: 20),
+        NLButton(
+          label: saving ? 'Сохранение...' : 'Сохранить',
+          onTap: saving ? null : onSave,
+          full: true,
+        ),
+        if (canCancel) ...[
+          const SizedBox(height: 8),
+          NLGhostButton(label: 'Отмена', onTap: saving ? null : onCancel),
+        ],
+      ],
+    );
+  }
+}
+
+class _PinEnabledView extends StatelessWidget {
+  final bool saving;
+  final VoidCallback onChangePin;
+  final VoidCallback onDisablePin;
+
+  const _PinEnabledView({
+    required this.saving,
+    required this.onChangePin,
+    required this.onDisablePin,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Container(
+          width: 58,
+          height: 58,
+          decoration: BoxDecoration(
+            color: NLColors.accentSoft,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: const Icon(
+            Icons.lock_outline_rounded,
+            color: NLColors.accent,
+            size: 28,
+          ),
+        ),
+        const SizedBox(height: 14),
+        const Text(
+          'PIN включён',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: NLColors.ink,
+          ),
+        ),
+        const SizedBox(height: 20),
+        NLButton(
+          label: 'Сменить PIN',
+          onTap: saving ? null : onChangePin,
+          full: true,
+        ),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: saving ? null : onDisablePin,
+          child: Text(
+            saving ? 'Сохранение...' : 'Отключить PIN',
+            style: const TextStyle(
+              fontWeight: FontWeight.w700,
+              color: NLColors.bad,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AppProtectionRow extends StatefulWidget {
+  final UserProfile? profile;
+
+  const _AppProtectionRow({required this.profile});
+
+  @override
+  State<_AppProtectionRow> createState() => _AppProtectionRowState();
+}
+
+class _AppProtectionRowState extends State<_AppProtectionRow> {
+  Future<void> _openProtectionDialog() async {
+    final profile = widget.profile;
+    if (profile == null) return;
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => _PinSettingsScreen(profile: profile)),
+    );
+    if (!mounted || changed != true) return;
+    setState(() {});
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final pinIsActive = hasAppPin();
+    return GestureDetector(
+      onTap: widget.profile != null ? _openProtectionDialog : null,
+      child: NLListRow(
+        icon: const Icon(
+          Icons.lock_outline_rounded,
+          size: 16,
+          color: NLColors.accent,
+        ),
+        iconBg: NLColors.accentSoft,
+        title: 'Защита приложения',
+        sub: pinIsActive ? 'PIN включён' : 'PIN выключен',
+      ),
+    );
+  }
+}
 
 class _BaselineStepper extends StatelessWidget {
   final String label;

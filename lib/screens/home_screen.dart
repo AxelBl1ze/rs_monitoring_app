@@ -8,9 +8,11 @@ import '../state/profile_provider.dart';
 import '../state/settings_provider.dart';
 import '../state/test_results_provider.dart';
 import '../services/analytics_service.dart';
+import '../services/storage_service.dart';
 import '../services/supabase_service.dart';
 import 'diary_entry_screen.dart';
 import 'history_list_screen.dart';
+import 'lock_screen.dart';
 import 'analytics_screen.dart';
 import 'settings_screen.dart';
 import 'patient_care_screen.dart';
@@ -27,6 +29,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int _tab = 0;
+  bool _lockOnResume = false;
 
   static const _keys = ['home', 'diary', 'chart', 'profile'];
 
@@ -45,9 +48,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _lockOnResume = true;
+      return;
+    }
     if (state == AppLifecycleState.resumed) {
+      if (_lockOnResume) {
+        _lockOnResume = false;
+        if (_lockIfNeeded()) return;
+      }
       _refreshDiary();
     }
+  }
+
+  bool _lockIfNeeded() {
+    if (!mounted) return false;
+    if (!hasAppPin()) return false;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => const LockScreen(destination: HomeScreen()),
+      ),
+      (_) => false,
+    );
+    return true;
   }
 
   Future<void> _refreshDiary() async {

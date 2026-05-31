@@ -4,10 +4,12 @@ import 'package:uuid/uuid.dart';
 import '../app_theme.dart';
 import '../models/diary_entry.dart';
 import '../models/doctor_models.dart';
+import '../services/storage_service.dart';
 import '../services/supabase_service.dart';
 import '../state/profile_provider.dart';
 import '../widgets/nl_widgets.dart';
 import 'chat_screen.dart';
+import 'lock_screen.dart';
 import 'settings_screen.dart';
 
 const _uuid = Uuid();
@@ -26,15 +28,51 @@ class DoctorHomeScreen extends StatefulWidget {
   State<DoctorHomeScreen> createState() => _DoctorHomeScreenState();
 }
 
-class _DoctorHomeScreenState extends State<DoctorHomeScreen> {
+class _DoctorHomeScreenState extends State<DoctorHomeScreen>
+    with WidgetsBindingObserver {
   List<DoctorPatientOverview> _patients = [];
   bool _loading = true;
   String? _error;
+  bool _lockOnResume = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _load();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _lockOnResume = true;
+      return;
+    }
+    if (state == AppLifecycleState.resumed) {
+      if (_lockOnResume) {
+        _lockOnResume = false;
+        if (_lockIfNeeded()) return;
+      }
+      _load();
+    }
+  }
+
+  bool _lockIfNeeded() {
+    if (!mounted) return false;
+    if (!hasAppPin()) return false;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(
+        builder: (_) => const LockScreen(destination: DoctorHomeScreen()),
+      ),
+      (_) => false,
+    );
+    return true;
   }
 
   Future<void> _load() async {
