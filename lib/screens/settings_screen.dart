@@ -1179,6 +1179,7 @@ class SettingsBody extends StatelessWidget {
                           color: NLColors.ink,
                         ),
                         title: 'Напоминания',
+                        last: true,
                         right: Text(
                           '$reminderCount ›',
                           style: const TextStyle(
@@ -1186,21 +1187,6 @@ class SettingsBody extends StatelessWidget {
                             color: NLColors.muted,
                           ),
                         ),
-                      ),
-                    ),
-                    const NLListRow(
-                      title: 'Язык',
-                      right: Text(
-                        'Русский ›',
-                        style: TextStyle(fontSize: 14, color: NLColors.muted),
-                      ),
-                    ),
-                    const NLListRow(
-                      title: 'Тема',
-                      last: true,
-                      right: Text(
-                        'Системная ›',
-                        style: TextStyle(fontSize: 14, color: NLColors.muted),
                       ),
                     ),
                   ],
