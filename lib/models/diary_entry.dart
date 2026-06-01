@@ -72,7 +72,7 @@ class DiaryEntry {
 
   factory DiaryEntry.fromJson(Map<String, dynamic> json) => DiaryEntry(
     id: json['id'] as String,
-    dateTime: DateTime.parse(json['dateTime'] as String),
+    dateTime: DateTime.parse(json['dateTime'] as String).toLocal(),
     fatigue: json['fatigue'] as int,
     pain: json['pain'] as int,
     mood: json['mood'] as int,

@@ -284,9 +284,18 @@ class TappingResultScreen extends StatelessWidget {
             NLTopBar(
               leading: NLBackBtn(),
               title: 'Результат',
-              trailing: const Text(
-                'Готово',
-                style: TextStyle(fontSize: 14, color: NLColors.muted),
+              trailing: GestureDetector(
+                onTap: () => Navigator.of(context).pop(),
+                behavior: HitTestBehavior.opaque,
+                child: const FittedBox(
+                  fit: BoxFit.scaleDown,
+                  child: Text(
+                    'Готово',
+                    maxLines: 1,
+                    softWrap: false,
+                    style: TextStyle(fontSize: 14, color: NLColors.muted),
+                  ),
+                ),
               ),
             ),
             Expanded(
