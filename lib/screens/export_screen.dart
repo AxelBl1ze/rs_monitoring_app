@@ -58,10 +58,23 @@ class _ExportScreenState extends State<ExportScreen> {
     return '${dt.day} ${months[dt.month - 1]}';
   }
 
-  Future<void> _export(BuildContext context) async {
+  Rect _sharePositionOrigin(BuildContext context) {
+    final renderObject = context.findRenderObject();
+    if (renderObject is RenderBox &&
+        renderObject.hasSize &&
+        !renderObject.size.isEmpty) {
+      return renderObject.localToGlobal(Offset.zero) & renderObject.size;
+    }
+
+    final screenSize = MediaQuery.sizeOf(context);
+    return Rect.fromLTWH(screenSize.width / 2, screenSize.height / 2, 1, 1);
+  }
+
+  Future<void> _export(BuildContext context, BuildContext shareContext) async {
     final profile = context.read<ProfileProvider>().profile;
     final allDiary = context.read<DiaryProvider>().diaryEntriesSorted;
     final allTests = context.read<TestResultsProvider>().results;
+    final sharePositionOrigin = _sharePositionOrigin(shareContext);
 
     final filteredDiary = ExportService.filterDiaryByPeriod(
       allDiary,
@@ -102,6 +115,7 @@ class _ExportScreenState extends State<ExportScreen> {
         text: _format == _ExportFormat.pdf
             ? 'NeuroLife — PDF-отчёт пациента'
             : 'NeuroLife — отчёт пациента',
+        sharePositionOrigin: sharePositionOrigin,
       );
     } catch (e) {
       messenger.showSnackBar(
@@ -316,24 +330,28 @@ class _ExportScreenState extends State<ExportScreen> {
                     ),
                     const SizedBox(height: 14),
 
-                    NLButton(
-                      label: _loading ? 'Формирую...' : 'Сформировать отчёт',
-                      full: true,
-                      icon: _loading
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
+                    Builder(
+                      builder: (shareContext) => NLButton(
+                        label: _loading ? 'Формирую...' : 'Сформировать отчёт',
+                        full: true,
+                        icon: _loading
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.download_outlined,
+                                size: 18,
                                 color: Colors.white,
                               ),
-                            )
-                          : const Icon(
-                              Icons.download_outlined,
-                              size: 18,
-                              color: Colors.white,
-                            ),
-                      onTap: _loading ? null : () => _export(context),
+                        onTap: _loading
+                            ? null
+                            : () => _export(context, shareContext),
+                      ),
                     ),
                   ],
                 ),
