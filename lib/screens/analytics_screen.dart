@@ -156,6 +156,7 @@ class _AnalyticsBodyState extends State<AnalyticsBody> {
     final tests = context.watch<TestResultsProvider>();
     final current = _currentEntries(diary);
     final prev = _prevEntries(diary);
+    final indexPrediction = AnalyticsService.predictNextCompositeIndex(current);
 
     final fatigueVals = AnalyticsService.fatigueValues(current);
     final painVals = AnalyticsService.painValues(current);
@@ -286,6 +287,13 @@ class _AnalyticsBodyState extends State<AnalyticsBody> {
                   )
                 else ...[
                   if (hasDiaryData) ...[
+                    const NLSectionTitle('Прогноз состояния'),
+                    _HealthIndexForecastCard(
+                      prediction: indexPrediction,
+                      entriesCount: current.length,
+                    ),
+                    const SizedBox(height: 12),
+
                     // Усталость
                     NLCard(
                       child: Column(
@@ -664,6 +672,225 @@ class _AnalyticsBodyState extends State<AnalyticsBody> {
                 ],
               ],
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HealthIndexForecastCard extends StatelessWidget {
+  final HealthIndexPrediction? prediction;
+  final int entriesCount;
+
+  const _HealthIndexForecastCard({
+    required this.prediction,
+    required this.entriesCount,
+  });
+
+  Color _indexColor(int index) {
+    if (index >= 70) return NLColors.good;
+    if (index >= 45) return NLColors.warn;
+    return NLColors.bad;
+  }
+
+  String _indexLabel(int index) {
+    if (index >= 70) return 'Хорошее';
+    if (index >= 45) return 'Умеренное';
+    return 'Требует внимания';
+  }
+
+  String _signed(double value) =>
+      '${value > 0 ? '+' : ''}${value.toStringAsFixed(1)}';
+
+  @override
+  Widget build(BuildContext context) {
+    final prediction = this.prediction;
+    if (prediction == null) {
+      return NLCard(
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: NLColors.accentSoft,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(
+                Icons.timeline_rounded,
+                size: 22,
+                color: NLColors.accent,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Прогноз появится позже',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: NLColors.ink,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Линейная регрессия требует минимум 3 записи · сейчас $entriesCount',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: NLColors.muted,
+                      height: 1.35,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final color = _indexColor(prediction.predictedIndex);
+    final trendIsStable = prediction.slopePerEntry.abs() < 0.4;
+    final trendColor = trendIsStable
+        ? NLColors.muted
+        : prediction.slopePerEntry > 0
+        ? NLColors.good
+        : NLColors.bad;
+    final trendBg = trendIsStable
+        ? NLColors.surface2
+        : prediction.slopePerEntry > 0
+        ? NLColors.mintSoft
+        : NLColors.roseSoft;
+    final trendLabel = trendIsStable
+        ? 'Стабильно'
+        : prediction.slopePerEntry > 0
+        ? 'Рост'
+        : 'Снижение';
+    final chartData = [
+      ...prediction.observedIndices.map((index) => index / 10),
+      prediction.predictedIndex / 10,
+    ];
+
+    return NLCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Следующий health index',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: NLColors.ink,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Линейная регрессия · ${prediction.sampleCount} записей · R² ${(prediction.rSquared * 100).round()}%',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: NLColors.muted,
+                        height: 1.35,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: trendBg,
+                  borderRadius: BorderRadius.all(NLRadius.pill),
+                ),
+                child: Text(
+                  trendLabel,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: trendColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${prediction.predictedIndex}',
+                style: TextStyle(
+                  fontSize: 42,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -1,
+                  color: color,
+                  height: 0.95,
+                ),
+              ),
+              const SizedBox(width: 4),
+              const Padding(
+                padding: EdgeInsets.only(bottom: 5),
+                child: Text(
+                  '/100',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: NLColors.muted,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      _indexLabel(prediction.predictedIndex),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'последний ${prediction.latestIndex} · ${_signed(prediction.slopePerEntry)} п/запись',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.right,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: NLColors.muted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          NLChart(
+            data: chartData,
+            threshold: 5,
+            color: color,
+            tinted: color.withValues(alpha: 0.14),
+            height: 100,
+            maxY: 10,
           ),
         ],
       ),

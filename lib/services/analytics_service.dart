@@ -38,6 +38,24 @@ class DeteriorationEpisode {
   });
 }
 
+class HealthIndexPrediction {
+  final int predictedIndex;
+  final int latestIndex;
+  final double slopePerEntry;
+  final double rSquared;
+  final int sampleCount;
+  final List<int> observedIndices;
+
+  const HealthIndexPrediction({
+    required this.predictedIndex,
+    required this.latestIndex,
+    required this.slopePerEntry,
+    required this.rSquared,
+    required this.sampleCount,
+    required this.observedIndices,
+  });
+}
+
 class AnalyticsService {
   // ── Descriptive statistics ──────────────────────────────────────────────
 
@@ -239,6 +257,57 @@ class AnalyticsService {
         .toList();
     if (indices.isEmpty) return null;
     return indices.fold(0.0, (s, v) => s + v) / indices.length;
+  }
+
+  static HealthIndexPrediction? predictNextCompositeIndex(
+    List<DiaryEntry> entries, {
+    int minEntries = 3,
+  }) {
+    final sorted = List<DiaryEntry>.from(entries)
+      ..sort((a, b) => a.dateTime.compareTo(b.dateTime));
+    final values = sorted
+        .map(calculateCompositeIndexFromEntry)
+        .whereType<int>()
+        .map((value) => value.toDouble())
+        .toList();
+    if (values.length < minEntries) return null;
+
+    final n = values.length;
+    final xMean = (n - 1) / 2;
+    final yMean = values.fold(0.0, (sum, value) => sum + value) / n;
+    var numerator = 0.0;
+    var denominator = 0.0;
+
+    for (var i = 0; i < n; i++) {
+      final x = i.toDouble();
+      numerator += (x - xMean) * (values[i] - yMean);
+      denominator += (x - xMean) * (x - xMean);
+    }
+    if (denominator == 0) return null;
+
+    final slope = numerator / denominator;
+    final intercept = yMean - slope * xMean;
+    final predicted = (intercept + slope * n).clamp(0.0, 100.0);
+
+    var residualSum = 0.0;
+    var totalSum = 0.0;
+    for (var i = 0; i < n; i++) {
+      final fitted = intercept + slope * i;
+      residualSum += (values[i] - fitted) * (values[i] - fitted);
+      totalSum += (values[i] - yMean) * (values[i] - yMean);
+    }
+    final rSquared = totalSum == 0
+        ? 1.0
+        : (1 - residualSum / totalSum).clamp(0.0, 1.0).toDouble();
+
+    return HealthIndexPrediction(
+      predictedIndex: predicted.round(),
+      latestIndex: values.last.round(),
+      slopePerEntry: slope,
+      rSquared: rSquared,
+      sampleCount: n,
+      observedIndices: values.map((value) => value.round()).toList(),
+    );
   }
 
   // ── Signals ─────────────────────────────────────────────────────────────
